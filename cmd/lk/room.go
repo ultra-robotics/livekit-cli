@@ -181,6 +181,20 @@ var (
 							Name:  "exit-after-publish",
 							Usage: "When publishing, exit after file or stream is complete",
 						},
+						&cli.BoolFlag{
+							Name:  "flexfec",
+							Usage: "Generate FlexFEC-03 packets alongside the primary video stream (publisher-side FEC, Chrome-compatible)",
+						},
+						&cli.UintFlag{
+							Name:  "flexfec-media-packets",
+							Usage: "Media packets accumulated per FEC batch when --flexfec is set",
+							Value: 10,
+						},
+						&cli.UintFlag{
+							Name:  "flexfec-packets",
+							Usage: "FEC packets generated per batch when --flexfec is set",
+							Value: 2,
+						},
 						&cli.StringSliceFlag{
 							Name:  "attribute",
 							Usage: "set attributes in key=value format, can be used multiple times",
@@ -973,6 +987,19 @@ func joinRoom(ctx context.Context, cmd *cli.Command) error {
 		maps.Copy(participantAttributes, fileAttrs)
 	}
 
+	connectOpts := []lksdk.ConnectOption{lksdk.WithAutoSubscribe(autoSubscribe)}
+	if cmd.Bool("flexfec") {
+		fecOpts, err := buildFlexFECConnectOptions(cmd)
+		if err != nil {
+			return err
+		}
+		connectOpts = append(connectOpts, fecOpts...)
+		logger.Infow("FlexFEC-03 enabled",
+			"mediaPackets", cmd.Uint("flexfec-media-packets"),
+			"fecPackets", cmd.Uint("flexfec-packets"),
+		)
+	}
+
 	room, err := lksdk.ConnectToRoom(project.URL, lksdk.ConnectInfo{
 		APIKey:                project.APIKey,
 		APISecret:             project.APISecret,
@@ -980,7 +1007,7 @@ func joinRoom(ctx context.Context, cmd *cli.Command) error {
 		ParticipantIdentity:   participantIdentity,
 		ParticipantAttributes: participantAttributes,
 		ParticipantMetadata:   cmd.String("metadata"),
-	}, roomCB, lksdk.WithAutoSubscribe(autoSubscribe))
+	}, roomCB, connectOpts...)
 	if err != nil {
 		return err
 	}
