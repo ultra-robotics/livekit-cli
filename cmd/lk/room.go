@@ -988,6 +988,10 @@ func joinRoom(ctx context.Context, cmd *cli.Command) error {
 
 	var connectOpts []lksdk.ConnectOption
 	connectOpts = append(connectOpts, lksdk.WithAutoSubscribe(autoSubscribe))
+	// Always dial the URL we were given. LiveKit Cloud's /settings/regions sorts
+	// regions by client proximity even when queried via a region-pinned hostname,
+	// so with discovery enabled the SDK ignores the pinned region.
+	connectOpts = append(connectOpts, lksdk.WithDisableRegionDiscovery())
 
 	var (
 		statsGetterMu sync.Mutex
