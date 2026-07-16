@@ -1007,7 +1007,10 @@ func joinRoom(ctx context.Context, cmd *cli.Command) error {
 			statsGetters = append(statsGetters, g)
 			statsGetterMu.Unlock()
 		})
-		connectOpts = append(connectOpts, lksdk.WithInterceptors([]interceptor.Factory{statsFactory}))
+		// WithInterceptors replaces the SDK defaults (NACK responder, TWCC, RTCP
+		// reports) unless defaults are explicitly re-included; without this the
+		// publisher ignores SFU NACKs and uplink loss is unrecoverable.
+		connectOpts = append(connectOpts, lksdk.WithInterceptors([]interceptor.Factory{statsFactory}), lksdk.WithIncludeDefaultInterceptors(true))
 	}
 
 	room, err := lksdk.ConnectToRoom(project.URL, lksdk.ConnectInfo{
