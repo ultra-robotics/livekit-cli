@@ -33,6 +33,7 @@ import (
 	"github.com/urfave/cli/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/livekit/mediatransportutil/pkg/pacer"
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
 	"github.com/livekit/protocol/logger"
@@ -211,6 +212,16 @@ var (
 							Name:  "stats-interval",
 							Usage: "Seconds between stats logs when --stats is set",
 							Value: 5.0,
+						},
+						&cli.FloatFlag{
+							Name:  "pacer-rate-mbps",
+							Usage: "Pace outgoing RTP with a leaky-bucket pacer draining at this rate (0 disables). Prevents keyframe line-rate bursts from overflowing token-bucket policers on the path.",
+							Value: 0,
+						},
+						&cli.IntFlag{
+							Name:  "pacer-interval-ms",
+							Usage: "Leaky-bucket pacer send interval in milliseconds",
+							Value: 3,
 						},
 					},
 				},
@@ -1011,6 +1022,14 @@ func joinRoom(ctx context.Context, cmd *cli.Command) error {
 		// reports) unless defaults are explicitly re-included; without this the
 		// publisher ignores SFU NACKs and uplink loss is unrecoverable.
 		connectOpts = append(connectOpts, lksdk.WithInterceptors([]interceptor.Factory{statsFactory}), lksdk.WithIncludeDefaultInterceptors(true))
+	}
+
+	if rate := cmd.Float("pacer-rate-mbps"); rate > 0 {
+		connectOpts = append(connectOpts, lksdk.WithPacer(pacer.NewPacerFactory(
+			pacer.LeakyBucketPacer,
+			pacer.WithBitrate(int(rate*1e6)),
+			pacer.WithSendInterval(time.Duration(cmd.Int("pacer-interval-ms"))*time.Millisecond),
+		)))
 	}
 
 	room, err := lksdk.ConnectToRoom(project.URL, lksdk.ConnectInfo{
